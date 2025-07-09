@@ -1,411 +1,77 @@
 package 이정훈_자바_프로젝트;
 
-import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import javax.sound.sampled.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.io.IOException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class 이정훈_자바_프로젝트 extends JFrame {
 
-    // --- 기본 게임 데이터 (호환성 높은 이모지로 최종 수정) ---
-    private final String[] strAnimal = {"🐵", "🦁", "🐶", "🐱", "🐷", "🐘", "🐻", "🐪", "🐧", "🐯"};
-    private final String[] strFruit = {"🍎", "🍌", "🍓", "🍉", "🍇", "🍑", "🍋", "🍐", "🍒", "🍍"};
-
-    // --- 게임 상태 변수 ---
-    private int[][] arrayGame;
-    private int[][] checkGame;
-    private JButton[][] buttons;
-    private int firstSelectX = -1, firstSelectY = -1;
-    private int failCount = 0;
-    private boolean isChecking = false;
-
-    // --- 테마 및 UI 관련 변수 ---
+    private CardLayout cardLayout;
+    private JPanel mainPanel;
     private GameTheme currentTheme;
-    private JLabel timerLabel;
-    private JLabel failCountLabel;
+    private Difficulty currentDifficulty;
 
-    // --- 타이머 관련 변수 ---
-    private Timer gameTimer;
-    private int elapsedTime = 0;
-    private final int GAME_DURATION = 5 * 60; // 5분 (초 단위)
-
-    /**
-     * 테마별 UI 스타일(색상, 폰트)을 정의하는 내부 클래스
-     */
-    private static class GameTheme {
-        String themeName;
-        Color background;
-        Color cardBack;
-        Color cardHover;
-        Color cardMatched;
-        Color cardText;
-        Color cardFront;
-        Color accentColor;
-        Font titleFont;
-        Font buttonFont;
-        Font cardFont;
-        Font infoFont;
-
-        GameTheme(String themeName) {
-            this.themeName = themeName;
-            this.titleFont = new Font("나눔고딕", Font.BOLD, 32);
-            this.buttonFont = new Font("나눔고딕", Font.BOLD, 18);
-            this.cardFont = new Font("SansSerif", Font.BOLD, 50);
-            this.infoFont = new Font("나눔고딕", Font.BOLD, 16);
-
-            if (themeName.equals("Animal")) {
-                this.background = new Color(250, 240, 230);
-                this.cardBack = new Color(188, 143, 143);
-                this.cardHover = new Color(205, 155, 155);
-                this.cardMatched = new Color(210, 180, 140);
-                this.cardText = Color.WHITE;
-                this.cardFront = new Color(244, 164, 96);
-                this.accentColor = new Color(139, 69, 19);
-            } else { // Fruit 테마
-                this.background = new Color(240, 255, 240);
-                this.cardBack = new Color(60, 179, 113);
-                this.cardHover = new Color(70, 200, 130);
-                this.cardMatched = new Color(152, 251, 152);
-                this.cardText = Color.WHITE;
-                this.cardFront = new Color(255, 160, 122);
-                this.accentColor = new Color(255, 99, 71);
-            }
-        }
-    }
-
-    /**
-     * 메인 생성자: 게임의 초기 화면을 설정합니다.
-     */
     public 이정훈_자바_프로젝트() {
-        setTitle("카드 맞추기 게임");
+        setTitle("이정훈의 카드 맞추기 게임");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(500, 300));
+        setSize(800, 850);
         setLocationRelativeTo(null);
-        showStartScreen();
+
+        cardLayout = new CardLayout();
+        mainPanel = new JPanel(cardLayout);
+
+        // 1. 시작 화면
+        mainPanel.add(new StartScreen(this::showDifficultyScreen), "Start");
+        // 2. 난이도 선택 화면 (테마 선택 후 동적 생성)
+        // 3. 게임 화면 (난이도 선택 후 동적 생성)
+        // 4. 게임 종료 화면 (게임 종료 후 동적 생성)
+
+        add(mainPanel);
         setVisible(true);
     }
 
-    /**
-     * 게임 시작 화면을 구성하고 보여줍니다.
-     */
-    private void showStartScreen() {
-        JPanel panel = new JPanel(new BorderLayout(20, 30));
-        panel.setBorder(new EmptyBorder(50, 60, 60, 60));
-        panel.setBackground(new Color(245, 245, 245));
-
-        JLabel titleLabel = new JLabel("어떤 게임을 할까요?", SwingConstants.CENTER);
-        titleLabel.setFont(new Font("나눔고딕", Font.BOLD, 28));
-        panel.add(titleLabel, BorderLayout.NORTH);
-
-        JPanel buttonPanel = new JPanel(new GridLayout(1, 2, 25, 0));
-        buttonPanel.setOpaque(false);
-
-        JButton animalButton = createStyledButton("동물 친구들 🐵", new GameTheme("Animal"), () -> startGame(true, new GameTheme("Animal")));
-        JButton fruitButton = createStyledButton("새콤달콤 과일 🍓", new GameTheme("Fruit"), () -> startGame(false, new GameTheme("Fruit")));
-
-        buttonPanel.add(animalButton);
-        buttonPanel.add(fruitButton);
-
-        panel.add(buttonPanel, BorderLayout.CENTER);
-
-        setContentPane(panel);
-        pack();
-        setLocationRelativeTo(null);
-        revalidate();
-        repaint();
-    }
-
-    /**
-     * 스타일이 적용된 시작 화면 버튼을 생성합니다.
-     */
-    private JButton createStyledButton(String text, GameTheme theme, Runnable action) {
-        JButton button = new JButton(text);
-        button.setFont(theme.buttonFont);
-        button.setBackground(theme.cardBack);
-        button.setForeground(theme.cardText);
-        button.setFocusPainted(false);
-        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        button.setBorder(new EmptyBorder(20, 30, 20, 30));
-        button.addActionListener(e -> action.run());
-
-        button.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                button.setBackground(theme.cardHover);
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                button.setBackground(theme.cardBack);
-            }
-        });
-        return button;
-    }
-
-    /**
-     * 선택된 게임 타입으로 게임을 시작합니다.
-     */
-    private void startGame(boolean isAnimal, GameTheme theme) {
+    public void showDifficultyScreen(GameTheme theme) {
         this.currentTheme = theme;
-        initializeGameData(isAnimal);
-        setupGameUI();
-        startTimer();
+        DifficultyScreen difficultyScreen = new DifficultyScreen(
+                e -> startGame(Difficulty.EASY),
+                e -> startGame(Difficulty.NORMAL),
+                e -> startGame(Difficulty.HARD)
+        );
+        mainPanel.add(difficultyScreen, "Difficulty");
+        cardLayout.show(mainPanel, "Difficulty");
     }
 
-    /**
-     * 게임 데이터를 초기화하고 셔플합니다.
-     */
-    private void initializeGameData(boolean isAnimalGame) {
-        arrayGame = new int[4][5];
-        checkGame = new int[4][5];
-        buttons = new JButton[4][5];
-        failCount = 0;
-
-        for (int i = 0; i < 10; i++) {
-            for (int j = 0; j < 2; j++) {
-                int x, y;
-                do {
-                    x = (int) (Math.random() * 4);
-                    y = (int) (Math.random() * 5);
-                } while (arrayGame[x][y] != 0);
-                arrayGame[x][y] = (isAnimalGame ? 1 : 101) + i;
-            }
-        }
+    public void startGame(Difficulty difficulty) {
+        this.currentDifficulty = difficulty;
+        GameScreen gameScreen = new GameScreen(currentTheme, currentDifficulty, this::showEndScreen, this::showStartScreen);
+        mainPanel.add(gameScreen, "Game");
+        cardLayout.show(mainPanel, "Game");
     }
 
-    /**
-     * 게임 화면 UI를 구성합니다.
-     */
-    private void setupGameUI() {
-        getContentPane().removeAll();
-        setLayout(new BorderLayout(10, 10));
-        setBackground(currentTheme.background);
-
-        JPanel infoPanel = new JPanel(new GridLayout(1, 2, 10, 0));
-        infoPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
-        infoPanel.setBackground(currentTheme.background);
-
-        timerLabel = new JLabel("남은 시간: 05:00", SwingConstants.LEFT);
-        timerLabel.setFont(currentTheme.infoFont);
-        timerLabel.setForeground(currentTheme.accentColor);
-
-        failCountLabel = new JLabel("실패: 0", SwingConstants.RIGHT);
-        failCountLabel.setFont(currentTheme.infoFont);
-        failCountLabel.setForeground(currentTheme.accentColor);
-
-        infoPanel.add(timerLabel);
-        infoPanel.add(failCountLabel);
-        add(infoPanel, BorderLayout.NORTH);
-
-        JPanel gamePanel = new JPanel(new GridLayout(4, 5, 10, 10));
-        gamePanel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        gamePanel.setBackground(currentTheme.background);
-
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 5; j++) {
-                buttons[i][j] = new JButton();
-                buttons[i][j].setFont(currentTheme.cardFont);
-                buttons[i][j].setBackground(currentTheme.cardBack);
-                buttons[i][j].setFocusPainted(false);
-                buttons[i][j].setBorder(BorderFactory.createLineBorder(currentTheme.background, 2));
-                buttons[i][j].setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-                final int x = i;
-                final int y = j;
-
-                buttons[i][j].addActionListener(e -> onCardClick(x, y));
-                buttons[i][j].addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseEntered(MouseEvent e) {
-                        if (buttons[x][y].isEnabled() && buttons[x][y].getText().isEmpty()) {
-                            buttons[x][y].setBackground(currentTheme.cardHover);
-                        }
-                    }
-
-                    @Override
-                    public void mouseExited(MouseEvent e) {
-                        if (buttons[x][y].isEnabled() && buttons[x][y].getText().isEmpty()) {
-                            buttons[x][y].setBackground(currentTheme.cardBack);
-                        }
-                    }
-                });
-                gamePanel.add(buttons[i][j]);
-            }
-        }
-
-        add(gamePanel, BorderLayout.CENTER);
-
-        setSize(600, 750);
-        setLocationRelativeTo(null);
-        revalidate();
-        repaint();
+    public void showEndScreen(String message, boolean isWin) {
+        EndScreen endScreen = new EndScreen(message, isWin,
+                e -> showDifficultyScreen(currentTheme),
+                e -> showStartScreen()
+        );
+        mainPanel.add(endScreen, "End");
+        cardLayout.show(mainPanel, "End");
     }
 
-    /**
-     * 카드 클릭 이벤트를 처리합니다.
-     */
-    private void onCardClick(int x, int y) {
-        if (isChecking || checkGame[x][y] == 1 || (firstSelectX == x && firstSelectY == y)) {
-            return;
-        }
-
-        showItem(x, y);
-
-        if (firstSelectX == -1) {
-            firstSelectX = x;
-            firstSelectY = y;
-        } else {
-            isChecking = true;
-            checkSelectedCards(x, y);
-        }
+    public void showStartScreen() {
+        cardLayout.show(mainPanel, "Start");
     }
 
-    /**
-     * 선택된 두 카드를 비교하고 결과를 처리합니다.
-     */
-    private void checkSelectedCards(int secondX, int secondY) {
-        int val1 = arrayGame[firstSelectX][firstSelectY];
-        int val2 = arrayGame[secondX][secondY];
-
-        if (val1 == val2) { // 일치
-            checkGame[firstSelectX][firstSelectY] = 1;
-            checkGame[secondX][secondY] = 1;
-
-            buttons[firstSelectX][firstSelectY].setBackground(currentTheme.cardMatched);
-            buttons[secondX][secondY].setBackground(currentTheme.cardMatched);
-            buttons[firstSelectX][firstSelectY].setEnabled(false);
-            buttons[secondX][secondY].setEnabled(false);
-
-            resetSelection();
-
-            if (foundAllItems()) {
-                gameTimer.stop();
-                String message = String.format("🎉 축하합니다! 🎉\n모든 카드를 맞추셨습니다!\n총 실패 횟수: %d", failCount);
-                showEndGameDialog(message, "게임 클리어!");
-            }
-        } else { // 불일치
-            failCount++;
-            updateFailCount();
-
-            Timer mismatchTimer = new Timer(800, e -> {
-                hideItem(firstSelectX, firstSelectY);
-                hideItem(secondX, secondY);
-                resetSelection();
-            });
-            mismatchTimer.setRepeats(false);
-            mismatchTimer.start();
-        }
-    }
-
-    /**
-     * 선택 정보를 초기화합니다.
-     */
-    private void resetSelection() {
-        firstSelectX = -1;
-        firstSelectY = -1;
-        isChecking = false;
-    }
-
-    /**
-     * 카드의 내용을 보여줍니다. (카드 앞면)
-     */
-    private void showItem(int x, int y) {
-        int value = arrayGame[x][y];
-        String itemEmoji;
-
-        if (value > 100) { // 과일
-            itemEmoji = strFruit[value - 101];
-        } else { // 동물
-            itemEmoji = strAnimal[value - 1];
-        }
-
-        buttons[x][y].setText(itemEmoji);
-        buttons[x][y].setBackground(currentTheme.cardFront);
-    }
-
-    /**
-     * 카드를 뒷면으로 뒤집습니다.
-     */
-    private void hideItem(int x, int y) {
-        if (checkGame[x][y] == 0) {
-            buttons[x][y].setText("");
-            buttons[x][y].setBackground(currentTheme.cardBack);
-        }
-    }
-
-    /**
-     * 모든 카드를 찾았는지 확인합니다.
-     */
-    private boolean foundAllItems() {
-        for (int[] row : checkGame) {
-            for (int cell : row) {
-                if (cell == 0) return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * 게임 타이머를 시작하고 UI를 업데이트합니다.
-     */
-    private void startTimer() {
-        elapsedTime = 0;
-        gameTimer = new Timer(1000, e -> {
-            elapsedTime++;
-            int remainingTime = GAME_DURATION - elapsedTime;
-            if (remainingTime <= 0) {
-                gameTimer.stop();
-                String message = String.format("시간이 초과되었습니다.\n총 실패 횟수: %d", failCount);
-                showEndGameDialog(message, "시간 초과");
-            } else {
-                updateTimerDisplay(remainingTime);
-            }
-        });
-        gameTimer.start();
-    }
-
-    /**
-     * 타이머 표시를 업데이트합니다.
-     */
-    private void updateTimerDisplay(int remainingSeconds) {
-        int minutes = remainingSeconds / 60;
-        int seconds = remainingSeconds % 60;
-        timerLabel.setText(String.format("남은 시간: %02d:%02d", minutes, seconds));
-    }
-
-    /**
-     * 실패 횟수 표시를 업데이트합니다.
-     */
-    private void updateFailCount() {
-        failCountLabel.setText(String.format("실패: %d", failCount));
-    }
-
-    /**
-     * 게임 종료 시 대화 상자를 표시합니다.
-     */
-    private void showEndGameDialog(String message, String title) {
-        Object[] options = {"다시 시작", "종료"};
-        int choice = JOptionPane.showOptionDialog(this,
-                message,
-                title,
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.INFORMATION_MESSAGE,
-                null,
-                options,
-                options[0]);
-
-        if (choice == JOptionPane.YES_OPTION) {
-            showStartScreen();
-        } else {
-            System.exit(0);
-        }
-    }
-
-    /**
-     * 프로그램의 진입점(entry point)입니다.
-     */
     public static void main(String[] args) {
+        // UI를 더 예쁘게 만들기 위해 Nimbus LookAndFeel 적용
         try {
             for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -417,5 +83,513 @@ public class 이정훈_자바_프로젝트 extends JFrame {
             // Nimbus를 사용할 수 없으면 기본 LookAndFeel 사용
         }
         SwingUtilities.invokeLater(이정훈_자바_프로젝트::new);
+    }
+}
+
+// =================================================================================
+// 화면 구성 요소 (Panels)
+// =================================================================================
+
+
+class StartScreen extends JPanel {
+    public StartScreen(ThemeSelectListener listener) {
+        setLayout(new BorderLayout(20, 30));
+        setBorder(new EmptyBorder(80, 80, 80, 80));
+        setBackground(UIFactory.COLOR_BACKGROUND);
+
+        JLabel titleLabel = UIFactory.createLabel("카드 맞추기 게임", UIFactory.FONT_TITLE_MAIN);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        add(titleLabel, BorderLayout.NORTH);
+
+        JPanel buttonPanel = new JPanel(new GridLayout(1, 2, 40, 0));
+        buttonPanel.setOpaque(false);
+
+        GameTheme animalTheme = new GameTheme("Animal");
+        GameTheme fruitTheme = new GameTheme("Fruit");
+
+        JButton animalButton = UIFactory.createButton("동물 친구들 🐵", animalTheme.cardBack, e -> listener.onThemeSelected(animalTheme));
+        JButton fruitButton = UIFactory.createButton("새콤달콤 과일 🍓", fruitTheme.cardBack, e -> listener.onThemeSelected(fruitTheme));
+
+        buttonPanel.add(animalButton);
+        buttonPanel.add(fruitButton);
+
+        add(buttonPanel, BorderLayout.CENTER);
+    }
+
+    @FunctionalInterface
+    interface ThemeSelectListener {
+        void onThemeSelected(GameTheme theme);
+    }
+}
+
+
+class DifficultyScreen extends JPanel {
+    public DifficultyScreen(ActionListener onEasy, ActionListener onNormal, ActionListener onHard) {
+        setLayout(new BorderLayout(20, 30));
+        setBorder(new EmptyBorder(80, 80, 80, 80));
+        setBackground(UIFactory.COLOR_BACKGROUND);
+
+        JLabel titleLabel = UIFactory.createLabel("난이도를 선택하세요", UIFactory.FONT_TITLE);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        add(titleLabel, BorderLayout.NORTH);
+
+        JPanel buttonPanel = new JPanel(new GridLayout(3, 1, 0, 20));
+        buttonPanel.setOpaque(false);
+
+        JButton easyButton = UIFactory.createButton("Easy", UIFactory.COLOR_EASY, onEasy);
+        JButton normalButton = UIFactory.createButton("Normal", UIFactory.COLOR_NORMAL, onNormal);
+        JButton hardButton = UIFactory.createButton("Hard", UIFactory.COLOR_HARD, onHard);
+
+        buttonPanel.add(easyButton);
+        buttonPanel.add(normalButton);
+        buttonPanel.add(hardButton);
+
+        add(buttonPanel, BorderLayout.CENTER);
+    }
+}
+
+class EndScreen extends JPanel {
+    public EndScreen(String message, boolean isWin, ActionListener onRetry, ActionListener onMenu) {
+        setLayout(new BorderLayout(20, 30));
+        setBorder(new EmptyBorder(80, 80, 80, 80));
+        setBackground(isWin ? new Color(220, 255, 220) : new Color(255, 220, 220));
+
+        JLabel titleLabel = UIFactory.createLabel(message, UIFactory.FONT_TITLE);
+        titleLabel.setForeground(isWin ? new Color(0, 100, 0) : new Color(139, 0, 0));
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        add(titleLabel, BorderLayout.CENTER);
+
+        JPanel buttonPanel = new JPanel(new GridLayout(1, 2, 40, 0));
+        buttonPanel.setOpaque(false);
+        buttonPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
+
+
+        JButton retryButton = UIFactory.createButton("다시하기", UIFactory.COLOR_NORMAL, onRetry);
+        JButton menuButton = UIFactory.createButton("메인 메뉴", UIFactory.COLOR_HARD, onMenu);
+
+        buttonPanel.add(retryButton);
+        buttonPanel.add(menuButton);
+        add(buttonPanel, BorderLayout.SOUTH);
+    }
+}
+
+
+// =================================================================================
+// 게임 로직 핵심 (GameScreen)
+// =================================================================================
+
+class GameScreen extends JPanel {
+    private final GameTheme theme;
+    private final Difficulty difficulty;
+    private final EndGameListener endGameListener;
+    private final Runnable showStartScreenListener;
+
+    private final JButton[][] buttons;
+    private int[][] cardValues;
+    private boolean[][] matched;
+
+    private int firstSelectX = -1, firstSelectY = -1;
+    private boolean isChecking = false;
+
+    private Timer gameTimer;
+    private int remainingSeconds;
+    private int failCount;
+
+    private JLabel timeLabel;
+    private JLabel failLabel;
+
+    public GameScreen(GameTheme theme, Difficulty difficulty, EndGameListener endGameListener, Runnable showStartScreenListener) {
+        this.theme = theme;
+        this.difficulty = difficulty;
+        this.endGameListener = endGameListener;
+        this.showStartScreenListener = showStartScreenListener;
+
+        this.buttons = new JButton[difficulty.rows][difficulty.cols];
+        this.cardValues = new int[difficulty.rows][difficulty.cols];
+        this.matched = new boolean[difficulty.rows][difficulty.cols];
+        this.remainingSeconds = difficulty.timeLimit;
+        this.failCount = difficulty.failLimit;
+
+        setLayout(new BorderLayout(10, 10));
+        setBorder(new EmptyBorder(20, 20, 20, 20));
+        setBackground(theme.background);
+
+        initializeGameData();
+        setupUI();
+        startTimer();
+
+        // 모든 난이도에서 미리보기 기능 활성화
+        peekCards();
+    }
+
+    private void initializeGameData() {
+        int numPairs = difficulty.rows * difficulty.cols / 2;
+        String[] source = theme.themeName.equals("Animal") ? Data.ANIMALS : Data.FRUITS;
+
+        List<Integer> cards = new ArrayList<>();
+        for (int i = 0; i < numPairs; i++) {
+            cards.add(i);
+            cards.add(i);
+        }
+        Collections.shuffle(cards);
+
+        int k = 0;
+        for (int i = 0; i < difficulty.rows; i++) {
+            for (int j = 0; j < difficulty.cols; j++) {
+                cardValues[i][j] = cards.get(k++);
+            }
+        }
+    }
+
+    private void setupUI() {
+        // 상단 정보 패널
+        JPanel infoPanel = new JPanel(new BorderLayout(20, 0));
+        infoPanel.setOpaque(false);
+        infoPanel.setBorder(new EmptyBorder(0, 10, 10, 10));
+
+        // 홈 버튼
+        JButton homeButton = UIFactory.createButton("🏠", theme.cardBack, e -> {
+            if(gameTimer != null) gameTimer.stop();
+            showStartScreenListener.run();
+        });
+        infoPanel.add(homeButton, BorderLayout.WEST);
+
+        // 중앙 정보 (시간, 실패)
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 40, 0));
+        statusPanel.setOpaque(false);
+
+        timeLabel = UIFactory.createLabel("⏳ " + formatTime(remainingSeconds), UIFactory.FONT_INFO);
+        statusPanel.add(timeLabel);
+
+        failLabel = UIFactory.createLabel("💣 " + failCount, UIFactory.FONT_INFO);
+        statusPanel.add(failLabel);
+
+        infoPanel.add(statusPanel, BorderLayout.CENTER);
+        add(infoPanel, BorderLayout.NORTH);
+
+        // 게임 카드 패널
+        JPanel gamePanel = new JPanel(new GridLayout(difficulty.rows, difficulty.cols, 8, 8));
+        gamePanel.setOpaque(false);
+
+        String[] source = theme.themeName.equals("Animal") ? Data.ANIMALS : Data.FRUITS;
+
+        for (int i = 0; i < difficulty.rows; i++) {
+            for (int j = 0; j < difficulty.cols; j++) {
+                buttons[i][j] = new JButton();
+                buttons[i][j].setFont(UIFactory.FONT_CARD);
+                buttons[i][j].setBackground(theme.cardBack);
+                buttons[i][j].setFocusPainted(false);
+                buttons[i][j].setBorder(BorderFactory.createLineBorder(theme.background, 2));
+
+                final int x = i;
+                final int y = j;
+
+                buttons[i][j].addActionListener(e -> onCardClick(x, y));
+                buttons[i][j].addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        if (buttons[x][y].isEnabled() && buttons[x][y].getText().isEmpty()) {
+                            buttons[x][y].setBackground(theme.cardHover);
+                        }
+                    }
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        if (buttons[x][y].isEnabled() && buttons[x][y].getText().isEmpty()) {
+                            buttons[x][y].setBackground(theme.cardBack);
+                        }
+                    }
+                });
+                gamePanel.add(buttons[i][j]);
+            }
+        }
+        add(gamePanel, BorderLayout.CENTER);
+    }
+
+    private void onCardClick(int x, int y) {
+        if (isChecking || matched[x][y] || (firstSelectX == x && firstSelectY == y)) {
+            return;
+        }
+
+        SoundManager.play("click.wav");
+        showItem(x, y);
+
+        if (firstSelectX == -1) {
+            firstSelectX = x;
+            firstSelectY = y;
+        } else {
+            isChecking = true;
+            checkSelectedCards(x, y);
+        }
+    }
+
+    private void checkSelectedCards(int secondX, int secondY) {
+        if (cardValues[firstSelectX][firstSelectY] == cardValues[secondX][secondY]) {
+            // 정답
+            SoundManager.play("match.wav");
+            matched[firstSelectX][firstSelectY] = true;
+            matched[secondX][secondY] = true;
+
+            animateMatch(buttons[firstSelectX][firstSelectY]);
+            animateMatch(buttons[secondX][secondY]);
+            buttons[firstSelectX][firstSelectY].setEnabled(false);
+            buttons[secondX][secondY].setEnabled(false);
+
+            resetSelection();
+
+            if (foundAllItems()) {
+                if (gameTimer != null) gameTimer.stop();
+                endGameListener.onGameEnd("🎉 축하합니다! 게임 클리어! 🎉", true);
+            }
+        } else {
+            // 오답
+            SoundManager.play("mismatch.wav");
+            failCount--;
+            failLabel.setText("💣 " + failCount);
+            if (failCount <= 0) {
+                if (gameTimer != null) gameTimer.stop();
+                endGameListener.onGameEnd("실패 횟수 초과!", false);
+                return;
+            }
+            Timer mismatchTimer = new Timer(800, e -> {
+                hideItem(firstSelectX, firstSelectY);
+                hideItem(secondX, secondY);
+                resetSelection();
+            });
+            mismatchTimer.setRepeats(false);
+            mismatchTimer.start();
+        }
+    }
+
+    private void resetSelection() {
+        firstSelectX = -1;
+        firstSelectY = -1;
+        isChecking = false;
+    }
+
+    private void showItem(int x, int y) {
+        String[] source = theme.themeName.equals("Animal") ? Data.ANIMALS : Data.FRUITS;
+        buttons[x][y].setText(source[cardValues[x][y]]);
+        buttons[x][y].setBackground(theme.cardFront);
+    }
+
+    private void hideItem(int x, int y) {
+        if (!matched[x][y]) {
+            buttons[x][y].setText("");
+            buttons[x][y].setBackground(theme.cardBack);
+        }
+    }
+
+    private boolean foundAllItems() {
+        for (boolean[] row : matched) {
+            for (boolean cell : row) {
+                if (!cell) return false;
+            }
+        }
+        return true;
+    }
+
+    private void startTimer() {
+        gameTimer = new Timer(1000, e -> {
+            remainingSeconds--;
+            timeLabel.setText("⏳ " + formatTime(remainingSeconds));
+            if (remainingSeconds <= 0) {
+                gameTimer.stop();
+                endGameListener.onGameEnd("시간 초과!", false);
+            }
+        });
+        gameTimer.start();
+    }
+
+    private void peekCards() {
+        // 모든 카드를 잠시 보여주는 기능
+        for(int i=0; i<difficulty.rows; i++) {
+            for (int j=0; j<difficulty.cols; j++) {
+                showItem(i, j);
+                buttons[i][j].setEnabled(false);
+            }
+        }
+
+        Timer peekTimer = new Timer(2000, e -> {
+             for(int i=0; i<difficulty.rows; i++) {
+                for (int j=0; j<difficulty.cols; j++) {
+                    hideItem(i, j);
+                    buttons[i][j].setEnabled(true);
+                }
+            }
+        });
+        peekTimer.setRepeats(false);
+        peekTimer.start();
+    }
+
+    private void animateMatch(JButton button) {
+        final Color originalColor = theme.cardFront;
+        final Color flashColor = Color.YELLOW;
+        Timer flashTimer = new Timer(150, new ActionListener() {
+            private int count = 0;
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (count % 2 == 0) {
+                    button.setBackground(flashColor);
+                } else {
+                    button.setBackground(originalColor);
+                }
+                count++;
+                if (count > 2) {
+                    button.setBackground(theme.cardMatched);
+                    ((Timer) e.getSource()).stop();
+                }
+            }
+        });
+        flashTimer.start();
+    }
+
+    private String formatTime(int seconds) {
+        return String.format("%02d:%02d", seconds / 60, seconds % 60);
+    }
+
+    @FunctionalInterface
+    interface EndGameListener {
+        void onGameEnd(String message, boolean isWin);
+    }
+}
+
+// =================================================================================
+// 데이터 및 유틸리티 클래스
+// =================================================================================
+
+/** 게임 테마 정의 */
+class GameTheme {
+    String themeName;
+    Color background;
+    Color cardBack;
+    Color cardHover;
+    Color cardMatched;
+    Color cardFront;
+
+    GameTheme(String themeName) {
+        this.themeName = themeName;
+        if (themeName.equals("Animal")) {
+            this.background = new Color(222, 238, 214);
+            this.cardBack = new Color(120, 153, 93);
+            this.cardHover = new Color(140, 173, 113);
+            this.cardMatched = new Color(200, 200, 200);
+            this.cardFront = new Color(255, 215, 130);
+        } else { // Fruit 테마
+            this.background = new Color(255, 235, 225);
+            this.cardBack = new Color(255, 130, 130);
+            this.cardHover = new Color(255, 150, 150);
+            this.cardMatched = new Color(200, 200, 200);
+            this.cardFront = new Color(170, 220, 255);
+        }
+    }
+}
+
+
+class Data {
+    public static final String[] ANIMALS = {
+        "🐵", "🦁", "🐶", "🐱", "🐷", "🐘", "🐻", "🐪", "🐧", "🐯",
+        "🐰", "🐸", "🐮", "🐔", "🐴", "🦉", "🦋", "🐢"
+    };
+    public static final String[] FRUITS = {
+        "🍎", "🍌", "🍓", "🍉", "🍇", "🍑", "🍋", "🍐", "🍒", "🍍",
+        "🥝", "🌰", "🥑", "🍅", "🍆", "🌽", "🌶️", "🍄" // 🥥를 🥦로 교체
+    };
+}
+
+
+enum Difficulty {
+    EASY(4, 5, 300, 30),   // 5분, 실패 30회
+    NORMAL(5, 6, 420, 30), // 7분, 실패 30회
+    HARD(6, 6, 600, 30);   // 10분, 실패 30회
+
+    final int rows, cols, timeLimit, failLimit;
+
+    Difficulty(int rows, int cols, int timeLimit, int failLimit) {
+        this.rows = rows;
+        this.cols = cols;
+        this.timeLimit = timeLimit; // 초 단위
+        this.failLimit = failLimit; // 횟수
+    }
+}
+
+
+class UIFactory {
+    public static final Color COLOR_BACKGROUND = new Color(245, 245, 245);
+    public static final Color COLOR_EASY = new Color(102, 187, 106);
+    public static final Color COLOR_NORMAL = new Color(66, 165, 245);
+    public static final Color COLOR_HARD = new Color(239, 83, 80);
+
+    public static final Font FONT_TITLE_MAIN = new Font("나눔고딕", Font.BOLD, 48);
+    public static final Font FONT_TITLE = new Font("나눔고딕", Font.BOLD, 36);
+    public static final Font FONT_BUTTON = new Font("나눔고딕", Font.BOLD, 24);
+    public static final Font FONT_INFO = new Font("나눔고딕", Font.BOLD, 22);
+    public static final Font FONT_CARD = new Font("SansSerif", Font.BOLD, 40);
+
+    public static JButton createButton(String text, Color bgColor, ActionListener listener) {
+        JButton button = new JButton(text) {
+             @Override
+             protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // 그림자
+                if (getModel().isPressed()) {
+                    g2.setColor(bgColor.darker());
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 25, 25);
+                } else {
+                    g2.setColor(Color.BLACK.darker());
+                    g2.fillRoundRect(3, 3, getWidth()-3, getHeight()-3, 25, 25);
+                    // 버튼
+                    g2.setColor(getModel().isRollover() ? bgColor.brighter() : bgColor);
+                    g2.fillRoundRect(0, 0, getWidth() - 4, getHeight() - 4, 25, 25);
+                }
+
+                g2.setColor(getForeground());
+                g2.setFont(getFont());
+                FontMetrics metrics = g2.getFontMetrics(getFont());
+                int x = (getWidth() - metrics.stringWidth(getText())) / 2;
+                int y = ((getHeight() - metrics.getHeight()) / 2) + metrics.getAscent();
+                g2.drawString(getText(), x, y);
+
+                g2.dispose();
+             }
+        };
+
+        button.setFont(FONT_BUTTON);
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setBorder(new EmptyBorder(15,30,15,30));
+        button.addActionListener(listener);
+        button.setContentAreaFilled(false);
+        return button;
+    }
+
+    public static JLabel createLabel(String text, Font font) {
+        JLabel label = new JLabel(text);
+        label.setFont(font);
+        return label;
+    }
+}
+
+
+class SoundManager {
+    public static void play(String fileName) {
+        /*
+         * 효과음 파일(.wav)을 프로젝트 폴더 내 'resources' 폴더에 넣고 사용하세요.
+         * 예시: 프로젝트폴더/resources/click.wav
+         *
+         * try (Clip clip = AudioSystem.getClip()) {
+         * URL url = SoundManager.class.getResource("/resources/" + fileName);
+         * if (url != null) {
+         * try (AudioInputStream audioIn = AudioSystem.getAudioInputStream(url)) {
+         * clip.open(audioIn);
+         * clip.start();
+         * }
+         * }
+         * } catch (UnsupportedAudioFileException | IOException | LineUnavailableException e) {
+         * // System.err.println("Sound Error: " + e.getMessage());
+         * }
+        */
     }
 }
